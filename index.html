@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Growbuch</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 26 26%22%3E%3Cpath d=%22M13 12C13 6 9 3 4 3c0 5 3 9 9 9z%22 fill=%22%234f8d58%22/%3E%3Cpath d=%22M13 15c0-5 4-8 9-8 0 5-3 8-9 8z%22 fill=%22%238a2f7a%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anybody:wdth,wght@50..150,400..900&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: Kopf mit Tageszähler + Phasen-Band (ein Kästchen pro Tag), darunter Messwert-Kurven als kleine Vielfache, dann die Einträge als Zeitstrahl. */
+:root{
+  --paper:#f2f4ee;      /* Grund, leicht grünstichig */
+  --sheet:#fbfcf8;      /* Flächen */
+  --ink:#18241d;        /* Text */
+  --ink-2:#4a5a50;      /* Sekundärtext */
+  --line:#d5dccf;       /* Linien */
+  --accent:#8a2f7a;     /* LED-Magenta: Rot+Blau-Spektrum */
+  --accent-soft:#f1e3ee;
+  --ph-keim:#c9b98a; --ph-saem:#9fc49a; --ph-wachs:#4f8d58; --ph-bluete:#a05a92; --ph-spuel:#6f8fb0; --ph-trock:#a8875d; --ph-fertig:#6b6b6b;
+  --good:#2f7a46; --warn:#a86a12; --bad:#b0352c;
+  --f-display:"Anybody","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --r:6px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --paper:#111813; --sheet:#18211b; --ink:#e4ebe2; --ink-2:#9fb0a4; --line:#2c3a30;
+  --accent:#e08ad0; --accent-soft:#3a2236;
+  --ph-keim:#b3a273; --ph-saem:#86b081; --ph-wachs:#5fa36a; --ph-bluete:#c27ab4; --ph-spuel:#7fa1c4; --ph-trock:#b9966a; --ph-fertig:#8a8a8a;
+  --good:#6cc48a; --warn:#e0a24a; --bad:#ef7b70;
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --paper:#111813; --sheet:#18211b; --ink:#e4ebe2; --ink-2:#9fb0a4; --line:#2c3a30;
+  --accent:#e08ad0; --accent-soft:#3a2236;
+  --ph-keim:#b3a273; --ph-saem:#86b081; --ph-wachs:#5fa36a; --ph-bluete:#c27ab4; --ph-spuel:#7fa1c4; --ph-trock:#b9966a; --ph-fertig:#8a8a8a;
+  --good:#6cc48a; --warn:#e0a24a; --bad:#ef7b70;
+}
+*{box-sizing:border-box}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 60px}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.05}
+.mono,.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.label{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);font-weight:700}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn{border:1px solid var(--line);background:var(--sheet);padding:8px 14px;border-radius:var(--r);font-weight:700}
+.btn:hover{border-color:var(--ink-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--sheet)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--ink-2);padding:6px 8px}
+.btn.ghost:hover{color:var(--ink);border-color:var(--line)}
+.btn.danger{color:var(--bad)}
+.btn:disabled{opacity:.5;cursor:default}
+
+/* Kopf */
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.brand{font-family:var(--f-display);font-weight:800;font-stretch:120%;font-size:20px;letter-spacing:.01em;display:flex;align-items:center;gap:10px}
+.brand svg{flex:none}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.toolbar select{border:1px solid var(--line);background:var(--sheet);padding:8px 10px;border-radius:var(--r);max-width:260px}
+
+.hero{display:grid;grid-template-columns:auto 1fr;gap:28px;align-items:end}
+.daycount{font-family:var(--f-display);font-weight:900;font-stretch:62%;font-size:clamp(88px,16vw,150px);line-height:.82;letter-spacing:-.02em;color:var(--ink)}
+.daycount small{display:block;font-size:13px;font-family:var(--f-body);font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);margin-bottom:8px;font-stretch:100%}
+.growmeta{display:flex;flex-direction:column;gap:10px;padding-bottom:6px;min-width:0}
+.growmeta h2{font-size:clamp(26px,4vw,40px);font-weight:800;font-stretch:105%}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:13px;background:var(--sheet);white-space:nowrap}
+.chip .dot{width:9px;height:9px;border-radius:50%}
+.chip.ex{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:700}
+
+/* Phasen-Band */
+.ribbon-box{display:flex;flex-direction:column;gap:8px}
+.ribbon-scroll{overflow-x:auto;padding-bottom:4px}
+.ribbon{display:flex;gap:2px;align-items:flex-end;min-height:44px}
+.ribbon .d{flex:0 0 auto;width:9px;height:28px;border-radius:2px;position:relative;opacity:.9}
+.ribbon .d.has{height:40px;opacity:1}
+.ribbon .d.has::after{content:"";position:absolute;left:50%;top:-6px;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--ink)}
+.ribbon .d.today{outline:2px solid var(--ink);outline-offset:1px}
+.ribbon .d.wk{margin-left:5px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+
+/* Kennzahlen */
+.now{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.now > div{background:var(--sheet);padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.now .v{font-family:var(--f-mono);font-size:22px;font-variant-numeric:tabular-nums}
+.now .v em{font-style:normal;font-size:13px;color:var(--ink-2);margin-left:3px}
+.now .s{font-size:12.5px;color:var(--ink-2)}
+.st-good{color:var(--good)} .st-warn{color:var(--warn)} .st-bad{color:var(--bad)}
+
+/* Diagramme */
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.chart{background:var(--sheet);border:1px solid var(--line);border-radius:var(--r);padding:12px 12px 6px;position:relative}
+.chart header{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.chart h3{font-size:15px;font-weight:700;font-stretch:100%;font-family:var(--f-body)}
+.chart .last{font-family:var(--f-mono);font-size:13px;color:var(--ink-2)}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart .empty{font-size:13px;color:var(--ink-2);padding:28px 0;text-align:center}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--paper);font-family:var(--f-mono);font-size:12px;padding:4px 8px;border-radius:4px;white-space:nowrap;transform:translate(-50%,-110%)}
+.charts-note{font-size:12.5px;color:var(--ink-2)}
+
+/* Zeitstrahl */
+.sec-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.sec-head h2{font-size:26px;font-weight:800;font-stretch:110%}
+.timeline{display:flex;flex-direction:column;gap:0;border-left:2px solid var(--line);margin-left:46px}
+.entry{position:relative;padding:0 0 26px 22px;display:flex;flex-direction:column;gap:8px}
+.entry .tag{position:absolute;left:-48px;top:0;width:40px;text-align:right;font-family:var(--f-display);font-weight:800;font-stretch:70%;font-size:22px;line-height:1}
+.entry .tag small{display:block;font-family:var(--f-body);font-size:10px;letter-spacing:.08em;font-weight:700;color:var(--ink-2);text-transform:uppercase;font-stretch:100%}
+.entry .pin{position:absolute;left:-7px;top:4px;width:12px;height:12px;border-radius:50%;border:2px solid var(--paper)}
+.entry .ehead{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px}
+.entry .date{font-weight:700}
+.entry .phase{font-size:13px;color:var(--ink-2)}
+.entry .actions{margin-left:auto;display:flex;gap:2px}
+.vals{display:flex;flex-wrap:wrap;gap:4px 16px;font-family:var(--f-mono);font-size:13px;font-variant-numeric:tabular-nums}
+.vals span b{font-family:var(--f-body);font-weight:400;color:var(--ink-2);font-size:12px;margin-right:4px}
+.tasks{display:flex;flex-wrap:wrap;gap:6px}
+.task{font-size:12.5px;border-radius:4px;padding:1px 8px;background:var(--accent-soft);color:var(--ink)}
+.note{max-width:65ch;white-space:pre-wrap;margin:0}
+.photos{display:flex;flex-wrap:wrap;gap:8px}
+.photos img{width:120px;height:120px;object-fit:cover;border-radius:4px;border:1px solid var(--line);background:var(--line);cursor:zoom-in}
+.confirm{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13.5px;background:var(--sheet);border:1px solid var(--bad);border-radius:var(--r);padding:8px 10px}
+
+/* Leerzustände */
+.blank{background:var(--sheet);border:1px dashed var(--line);border-radius:var(--r);padding:36px 24px;display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+.blank h2{font-size:28px;font-weight:800;font-stretch:110%}
+.blank p{margin:0;max-width:60ch;color:var(--ink-2)}
+.status{font-size:13px;color:var(--ink-2)}
+.status.err{color:var(--bad)}
+
+/* Dialog */
+dialog{border:none;padding:0;background:transparent;max-width:min(720px,calc(100vw - 24px));width:100%;color:var(--ink)}
+dialog::backdrop{background:rgba(10,16,12,.55)}
+.dlg{background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:20px;display:flex;flex-direction:column;gap:16px;max-height:calc(100vh - 40px);overflow:auto}
+.dlg h2{font-size:24px;font-weight:800;font-stretch:110%}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f label{font-size:12.5px;font-weight:700;color:var(--ink-2)}
+.f input,.f select,.f textarea{border:1px solid var(--line);background:var(--paper);padding:8px 10px;border-radius:var(--r);width:100%}
+.f textarea{min-height:90px;resize:vertical}
+.f .hint{font-size:12px;color:var(--ink-2);font-family:var(--f-mono)}
+fieldset{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;margin:0;display:flex;flex-wrap:wrap;gap:8px 16px}
+fieldset legend{font-size:12.5px;font-weight:700;color:var(--ink-2);padding:0 4px}
+fieldset label{display:inline-flex;gap:6px;align-items:center;font-size:14px}
+.dlg-foot{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;align-items:center}
+.dlg-foot .status{margin-right:auto}
+.thumbs{display:flex;flex-wrap:wrap;gap:6px}
+.thumbs div{position:relative}
+.thumbs img{width:72px;height:72px;object-fit:cover;border-radius:4px;border:1px solid var(--line)}
+.thumbs button{position:absolute;top:2px;right:2px;border:none;background:var(--ink);color:var(--paper);border-radius:50%;width:22px;height:22px;line-height:22px;padding:0;font-size:13px}
+.lightbox img{max-width:100%;max-height:calc(100vh - 80px);display:block;margin:0 auto;border-radius:6px}
+
+@media (max-width:560px){
+  .hero{grid-template-columns:1fr;gap:10px}
+  .timeline{margin-left:40px}
+  .entry .tag{left:-44px;width:36px;font-size:19px}
+  .entry .actions{margin-left:0}
+}
+@media (prefers-reduced-motion:no-preference){
+  .entry{animation:rise .35s ease both}
+  @keyframes rise{from{transform:translateY(4px)}to{transform:none}}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="top">
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><path d="M13 24V11" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M13 12C13 6 9 3 4 3c0 5 3 9 9 9z" fill="var(--ph-wachs)"/><path d="M13 15c0-5 4-8 9-8 0 5-3 8-9 8z" fill="var(--accent)"/></svg>
+      Growbuch
+    </div>
+    <div class="toolbar">
+      <select id="growSel" aria-label="Grow auswählen" hidden></select>
+      <button class="btn" id="btnNewGrow" type="button" hidden>Neuer Grow</button>
+      <button class="btn ghost" id="btnEditGrow" type="button" hidden>Grow bearbeiten</button>
+      <button class="btn ghost" id="btnExport" type="button" hidden>Export (JSON)</button>
+      <span class="status" id="whoami" hidden></span>
+      <button class="btn ghost" id="btnPw" type="button" hidden>Konto</button>
+      <button class="btn ghost" id="btnLogout" type="button" hidden>Abmelden</button>
+    </div>
+  </div>
+
+  <div id="main">
+    <div class="blank">
+      <h2>Dein Grow-Tagebuch wird geladen</h2>
+      <p>Hier erscheinen deine Grows mit Tageszähler, Phasen-Band, Messwert-Kurven (Höhe, Temperatur, Luftfeuchte, VPD) und allen Einträgen mit Fotos.</p>
+      <span class="status" id="bootStatus">Verbinde mit dem Server …</span>
+    </div>
+  </div>
+</div>
+
+<dialog id="dlgGrow">
+  <form class="dlg" id="formGrow" method="dialog">
+    <h2 id="growDlgTitle">Neuer Grow</h2>
+    <div class="grid">
+      <div class="f"><label for="g_name">Name</label><input id="g_name" required placeholder="z. B. Zelt 1 – Herbst 2026"></div>
+      <div class="f"><label for="g_strain">Sorte / Genetik</label><input id="g_strain" placeholder="z. B. Northern Lights Auto"></div>
+      <div class="f"><label for="g_type">Typ</label><select id="g_type"><option value="photo">Photoperiodisch</option><option value="auto">Autoflower</option></select></div>
+      <div class="f"><label for="g_medium">Medium</label><select id="g_medium"><option>Erde</option><option>Coco</option><option>Hydro / DWC</option><option>Living Soil</option><option>Steinwolle</option></select></div>
+    </div>
+    <div class="grid">
+      <div class="f"><label for="g_start">Start (Keimung)</label><input id="g_start" type="date" required></div>
+      <div class="f"><label for="g_flip">Blütebeginn</label><input id="g_flip" type="date"><span class="hint">Umstellung auf 12/12</span></div>
+      <div class="f"><label for="g_harvest">Ernte</label><input id="g_harvest" type="date"></div>
+      <div class="f"><label for="g_light">Lichtstunden pro Tag</label><input id="g_light" type="number" min="0" max="24" step="0.5" value="18"><span class="hint">für DLI-Berechnung</span></div>
+    </div>
+    <div class="grid">
+      <div class="f"><label for="g_tent">Zelt / Ort</label><input id="g_tent" placeholder="z. B. 80×80×160 cm"></div>
+      <div class="f"><label for="g_lamp">Lampe</label><input id="g_lamp" placeholder="z. B. LED 240 W"></div>
+      <div class="f"><label for="g_pot">Topf</label><input id="g_pot" placeholder="z. B. 11 l Stofftopf"></div>
+    </div>
+    <div class="f"><label for="g_notes">Notizen</label><textarea id="g_notes" placeholder="Ziele, Setup, Besonderheiten …"></textarea></div>
+    <div id="growDelBox"></div>
+    <div class="dlg-foot">
+      <span class="status" id="growStatus"></span>
+      <button class="btn ghost danger" type="button" id="btnDelGrow" hidden>Grow löschen</button>
+      <button class="btn" type="button" data-close>Abbrechen</button>
+      <button class="btn primary" type="submit" id="btnSaveGrow">Speichern</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlgEntry">
+  <form class="dlg" id="formEntry" method="dialog">
+    <h2 id="entryDlgTitle">Neuer Eintrag</h2>
+    <div class="grid">
+      <div class="f"><label for="e_date">Datum</label><input id="e_date" type="date" required><span class="hint" id="e_dayhint"></span></div>
+      <div class="f"><label for="e_phase">Phase</label><select id="e_phase"></select></div>
+      <div class="f"><label for="e_height">Höhe (cm)</label><input id="e_height" type="number" step="0.5" min="0" inputmode="decimal"></div>
+    </div>
+    <div class="grid">
+      <div class="f"><label for="e_temp">Temperatur (°C)</label><input id="e_temp" type="number" step="0.1" inputmode="decimal"></div>
+      <div class="f"><label for="e_rh">Luftfeuchte (% rH)</label><input id="e_rh" type="number" step="1" min="0" max="100" inputmode="decimal"></div>
+      <div class="f"><label>VPD (berechnet)</label><div class="hint" id="e_vpd" style="padding:9px 0">–</div></div>
+      <div class="f"><label for="e_lux">Licht (Lux)</label><input id="e_lux" type="number" step="100" min="0" inputmode="numeric"><span class="hint" id="e_ppfd">≈ PPFD aus Lux</span></div>
+    </div>
+    <div class="grid">
+      <div class="f"><label for="e_water">Wasser (ml)</label><input id="e_water" type="number" step="50" min="0" inputmode="numeric"></div>
+      <div class="f"><label for="e_ph">pH</label><input id="e_ph" type="number" step="0.1" min="0" max="14" inputmode="decimal"></div>
+      <div class="f"><label for="e_ec">EC (mS/cm)</label><input id="e_ec" type="number" step="0.1" min="0" inputmode="decimal"></div>
+      <div class="f"><label for="e_nutr">Dünger</label><input id="e_nutr" placeholder="z. B. Grow 2 ml/l"></div>
+    </div>
+    <fieldset id="e_tasks"><legend>Maßnahmen</legend></fieldset>
+    <div class="f"><label for="e_notes">Notiz</label><textarea id="e_notes" placeholder="Was ist dir heute aufgefallen?"></textarea></div>
+    <div class="f" id="photoField">
+      <label for="e_photos">Fotos</label>
+      <input id="e_photos" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple>
+      <div class="thumbs" id="e_thumbs"></div>
+    </div>
+    <div class="dlg-foot">
+      <span class="status" id="entryStatus"></span>
+      <button class="btn" type="button" data-close>Abbrechen</button>
+      <button class="btn primary" type="submit" id="btnSaveEntry">Eintrag speichern</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlgPw">
+  <form class="dlg" id="formPw" method="dialog">
+    <h2>Konto</h2>
+    <div class="f"><label for="pw_old">Aktuelles Passwort</label><input id="pw_old" type="password" autocomplete="current-password" required></div>
+    <div class="f"><label for="pw_new">Neues Passwort (min. 8 Zeichen)</label><input id="pw_new" type="password" autocomplete="new-password" minlength="8" required></div>
+    <div class="dlg-foot"><span class="status" id="pwStatus"></span><button class="btn" type="button" data-close>Schließen</button><button class="btn primary" type="submit">Passwort ändern</button></div>
+  </form>
+  <form class="dlg" id="formUser" hidden style="margin-top:12px">
+    <h2>Benutzer anlegen</h2>
+    <p class="status">Jeder Benutzer sieht nur seine eigenen Grows und Fotos.</p>
+    <div class="grid">
+      <div class="f"><label for="nu_name">Benutzername</label><input id="nu_name" autocomplete="off" required></div>
+      <div class="f"><label for="nu_pw">Passwort (min. 8 Zeichen)</label><input id="nu_pw" type="password" autocomplete="new-password" minlength="8" required></div>
+    </div>
+    <div class="dlg-foot"><span class="status" id="nuStatus"></span><button class="btn primary" type="submit">Benutzer anlegen</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlgPhoto" class="lightbox"><div class="dlg"><img id="lbImg" alt=""><div class="dlg-foot"><button class="btn" type="button" data-close>Schließen</button></div></div></dialog>
+
+<script>
+const PHASES=[
+  {id:"keimung",name:"Keimung",c:"--ph-keim"},
+  {id:"saemling",name:"Sämling",c:"--ph-saem"},
+  {id:"wachstum",name:"Wachstum",c:"--ph-wachs"},
+  {id:"bluete",name:"Blüte",c:"--ph-bluete"},
+  {id:"spuelen",name:"Spülen",c:"--ph-spuel"},
+  {id:"trocknung",name:"Trocknung",c:"--ph-trock"},
+  {id:"fertig",name:"Fertig / Curing",c:"--ph-fertig"}];
+const PH=Object.fromEntries(PHASES.map(p=>[p.id,p]));
+const TASKS=["Gegossen","Gedüngt","LST","Topping","FIM","Entlaubt","Umgetopft","Schädlingskontrolle","Lampe angepasst"];
+// VPD-Zielbereiche (kPa) je Phase
+const VPD_T={keimung:[0.4,0.8],saemling:[0.4,0.8],wachstum:[0.8,1.2],bluete:[1.2,1.6],spuelen:[1.2,1.6]};
+const LUX_PER_PPFD=70; // grober Umrechnungsfaktor für weiße Vollspektrum-LEDs
+const DAY=86400000;
+
+const S={user:null,isAdmin:false,grows:[],growsLoaded:false,growId:null,entries:[],entriesLoaded:false,unsubEntries:null,editEntry:null,editGrow:null,pending:[],confirmDel:null};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const num=v=>(v===""||v==null||isNaN(+v))?null:+v;
+const fmt=(v,d=1)=>v==null?"–":v.toLocaleString("de-DE",{minimumFractionDigits:d,maximumFractionDigits:d});
+const d0=s=>{const [y,m,d]=s.split("-").map(Number);return Date.UTC(y,m-1,d)};
+const isoToday=()=>{const t=new Date();return new Date(t.getTime()-t.getTimezoneOffset()*60000).toISOString().slice(0,10)};
+const deDate=s=>new Date(d0(s)).toLocaleDateString("de-DE",{weekday:"short",day:"2-digit",month:"2-digit",year:"numeric",timeZone:"UTC"});
+const dayOf=(g,s)=>Math.floor((d0(s)-d0(g.startDate))/DAY)+1;
+const bloomWeek=(g,s)=>g.flipDate&&d0(s)>=d0(g.flipDate)?Math.floor((d0(s)-d0(g.flipDate))/DAY/7)+1:null;
+function vpd(t,rh){if(t==null||rh==null)return null;const sv=x=>0.6108*Math.exp(17.27*x/(x+237.3));return Math.max(0,sv(t-2)-sv(t)*rh/100)} // Blatttemp. = Lufttemp. − 2 °C
+function vpdState(v,phase){const r=VPD_T[phase];if(v==null||!r)return null;if(v<r[0])return["st-warn","zu niedrig",r];if(v>r[1])return["st-warn","zu hoch",r];return["st-good","im Ziel",r]}
+const genId=p=>p+"-"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const blob=id=>"api.php?r=photos/"+id;
+async function api(method,path,body,ctype){
+  let url="api.php?r="+path.replace(/^api\//,"");
+  if(method==="PUT"||method==="DELETE"){url+="&m="+method;method="POST"}
+  const opt={method,headers:{},credentials:"same-origin"};
+  if(body!==undefined){if(ctype){opt.headers["Content-Type"]=ctype;opt.body=body}else{opt.headers["Content-Type"]="application/json";opt.body=JSON.stringify(body)}}
+  let r;try{r=await fetch(url,opt)}catch(e){throw {code:"offline",message:"Server nicht erreichbar. Prüfe deine Internetverbindung."}}
+  const j=await r.json().catch(()=>({}));
+  if(r.status===401&&!path.startsWith("api/login")){showLogin(false);throw {code:"auth",message:"Bitte erneut anmelden."}}
+  if(!r.ok)throw {code:r.status,message:j.error||("Fehler "+r.status)};
+  return j;
+}
+const errMsg=e=>e?.message||"Unbekannter Fehler";
+const cur=()=>S.grows.find(g=>g.id===S.growId)||null;
+function remember(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+function recall(k){try{return localStorage.getItem(k)}catch(e){return null}}
+
+/* ---------- Boot & Anmeldung ---------- */
+async function boot(){
+  try{const me=await api("GET","api/me");if(!me.user)return showLogin(me.canRegister);S.user=me.user;S.isAdmin=!!me.isAdmin;afterLogin()}
+  catch(e){setBoot(errMsg(e),true)}
+}
+function setBoot(msg,err){const el=$("bootStatus");if(el){el.textContent=msg;el.classList.toggle("err",!!err)}}
+function showLogin(canRegister){
+  S.user=null;S.grows=[];S.growsLoaded=false;S.growId=null;S.entries=[];
+  ["growSel","btnNewGrow","btnEditGrow","btnExport","whoami","btnPw","btnLogout"].forEach(id=>$(id).hidden=true);
+  const reg=!!canRegister;
+  $("main").innerHTML=`<form class="blank" id="formLogin" style="max-width:440px">
+    <h2>${reg?"Konto anlegen":"Anmelden"}</h2>
+    <p>${reg?'Das ist der erste Start. Lege dein Konto an – danach ist die Registrierung geschlossen. Weitere Benutzer legst du danach unter „Konto“ an.':"Melde dich an, um dein Growbuch zu öffnen."}</p>
+    <div class="f" style="width:100%"><label for="l_user">Benutzername</label><input id="l_user" autocomplete="username" required></div>
+    <div class="f" style="width:100%"><label for="l_pw">Passwort${reg?" (min. 8 Zeichen)":""}</label><input id="l_pw" type="password" autocomplete="${reg?"new-password":"current-password"}" required ${reg?'minlength="8"':""}></div>
+    <button class="btn primary" type="submit" id="btnLogin">${reg?"Konto anlegen":"Anmelden"}</button>
+    <span class="status err" id="loginStatus"></span>
+  </form>`;
+  $("l_user").focus();
+  $("formLogin").addEventListener("submit",async ev=>{
+    ev.preventDefault();$("btnLogin").disabled=true;$("loginStatus").textContent="";
+    try{const r=await api("POST",reg?"api/register":"api/login",{username:$("l_user").value.trim(),password:$("l_pw").value});S.user=r.user;S.isAdmin=!!(await api("GET","api/me")).isAdmin;afterLogin()}
+    catch(e){$("loginStatus").textContent=errMsg(e);$("btnLogin").disabled=false}
+  });
+}
+function afterLogin(){
+  ["btnNewGrow","whoami","btnPw","btnLogout"].forEach(id=>$(id).hidden=false);
+  $("whoami").textContent="Angemeldet als "+S.user;
+  $("main").innerHTML=`<div class="blank"><h2>Lade deine Grows …</h2></div>`;
+  loadGrows();
+}
+async function loadGrows(keep){
+  try{const list=await api("GET","api/grows");
+    S.grows=list.sort((a,b)=>(b.startDate||"").localeCompare(a.startDate||""));S.growsLoaded=true;
+    const want=keep||S.growId||recall("growbuch.grow");
+    selectGrow((S.grows.find(g=>g.id===want)||S.grows[0]||{}).id||null);
+  }catch(e){if(e.code!=="auth")$("main").innerHTML=`<div class="blank"><h2>Grows konnten nicht geladen werden</h2><p>${esc(errMsg(e))}</p></div>`}
+}
+async function loadEntries(){
+  const gid=S.growId;if(!gid)return;
+  try{const list=await api("GET","api/grows/"+encodeURIComponent(gid)+"/entries");if(gid!==S.growId)return;
+    S.entries=list.sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.createdAt||0)-(a.createdAt||0));}
+  catch(e){if(e.code==="auth")return;alertStatus(errMsg(e))}
+  S.entriesLoaded=true;render();
+}
+function selectGrow(id){
+  if(id!==S.growId){S.entries=[];S.entriesLoaded=false}
+  S.growId=id;S.confirmDel=null;
+  if(id){remember("growbuch.grow",id);loadEntries()}
+  render();
+}
+
+/* ---------- Render ---------- */
+function render(){
+  const sel=$("growSel");
+  sel.hidden=S.grows.length<1;
+  sel.innerHTML=S.grows.map(g=>`<option value="${esc(g.id)}" ${g.id===S.growId?"selected":""}>${esc(g.name)}${g.example?" (Beispiel)":""}</option>`).join("");
+  $("btnEditGrow").hidden=!cur();
+  $("btnExport").hidden=!cur();
+  const m=$("main");
+  if(!S.growsLoaded)return;
+  if(!S.grows.length){m.innerHTML=`<div class="blank"><h2>Noch kein Grow angelegt</h2><p>Lege deinen ersten Durchgang an – mit Startdatum, Sorte und optional dem Blütebeginn. Danach zählt das Growbuch die Tage und Blütewochen automatisch, und du kannst täglich Messwerte, Maßnahmen, Notizen und Fotos eintragen.</p><button class="btn primary" type="button" onclick="openGrow()">Ersten Grow anlegen</button></div>`;return}
+  const g=cur(); if(!g)return;
+  const today=isoToday();
+  const lastDate=[today,...S.entries.map(e=>e.date)].sort().pop();
+  const dNow=dayOf(g,today);
+  const latest=S.entries[0];
+  const curPhase=latest?.phase||(g.flipDate&&today>=g.flipDate?"bluete":"wachstum");
+  const bw=bloomWeek(g,today);
+  const days=Math.max(1,dayOf(g,lastDate));
+  const totalWeeks=Math.ceil(dNow/7);
+
+  m.innerHTML=`
+  <div class="wrap" style="gap:24px">
+    <section class="hero">
+      <div class="daycount"><small>Tag</small><span class="num">${dNow>0?dNow:"–"}</span></div>
+      <div class="growmeta">
+        <h2>${esc(g.name)}</h2>
+        <div class="chips">
+          ${g.example?'<span class="chip ex">Beispiel-Daten</span>':""}
+          <span class="chip"><span class="dot" style="background:var(${PH[curPhase]?.c||"--line"})"></span>${esc(PH[curPhase]?.name||curPhase)}</span>
+          <span class="chip">Woche ${totalWeeks>0?totalWeeks:"–"}</span>
+          ${bw?`<span class="chip">Blütewoche ${bw}</span>`:""}
+          ${g.strain?`<span class="chip">${esc(g.strain)}</span>`:""}
+          <span class="chip">${g.type==="auto"?"Autoflower":"Photoperiodisch"}</span>
+          ${g.medium?`<span class="chip">${esc(g.medium)}</span>`:""}
+          ${g.lightHours!=null?`<span class="chip mono">${fmt(g.lightHours,0)}/${fmt(24-g.lightHours,0)} h</span>`:""}
+        </div>
+        <div class="status">Start ${deDate(g.startDate)}${g.flipDate?" · Blüte ab "+deDate(g.flipDate):""}${g.harvestDate?" · Ernte "+deDate(g.harvestDate):""}${[g.tent,g.lamp,g.pot].filter(Boolean).length?" · "+esc([g.tent,g.lamp,g.pot].filter(Boolean).join(" · ")):""}</div>
+      </div>
+    </section>
+    ${ribbonHTML(g,days)}
+    ${nowHTML(g,curPhase)}
+    ${chartsHTML()}
+    <section style="display:flex;flex-direction:column;gap:18px">
+      <div class="sec-head"><h2>Einträge</h2><button class="btn primary" type="button" onclick="openEntry()">Eintrag für heute</button></div>
+      ${timelineHTML(g)}
+    </section>
+    ${g.notes?`<section style="display:flex;flex-direction:column;gap:6px"><span class="label">Notizen zum Grow</span><p class="note">${esc(g.notes)}</p></section>`:""}
+  </div>`;
+  wireCharts();
+}
+
+function phaseAt(g,s){ // Phase der jüngsten Eintragung bis zu diesem Tag
+  const asc=[...S.entries].sort((a,b)=>a.date.localeCompare(b.date));
+  let p=null; for(const e of asc){if(e.date<=s)p=e.phase;else break}
+  if(!p&&asc.length)p=asc[0].phase;
+  if(!p)p=g.flipDate&&s>=g.flipDate?"bluete":"wachstum";
+  if(g.harvestDate&&s>g.harvestDate&&p!=="fertig")p="trocknung";
+  return p;
+}
+function ribbonHTML(g,days){
+  const has=new Set(S.entries.map(e=>e.date)); const today=isoToday(); const cells=[];
+  for(let i=0;i<Math.min(days,400);i++){
+    const s=new Date(d0(g.startDate)+i*DAY).toISOString().slice(0,10); const p=PH[phaseAt(g,s)];
+    cells.push(`<span class="d ${has.has(s)?"has":""} ${s===today?"today":""} ${i&&i%7===0?"wk":""}" style="background:var(${p.c})" title="Tag ${i+1} · ${deDate(s)} · ${p.name}${has.has(s)?" · Eintrag":""}"></span>`);
+  }
+  const used=[...new Set(cells.length?Array.from({length:Math.min(days,400)},(_,i)=>phaseAt(g,new Date(d0(g.startDate)+i*DAY).toISOString().slice(0,10))):[])];
+  return `<section class="ribbon-box" aria-label="Phasen-Band">
+    <div class="sec-head"><span class="label">Phasen-Band · ein Kästchen pro Tag, Punkt = Eintrag, Abstand = neue Woche</span></div>
+    <div class="ribbon-scroll"><div class="ribbon">${cells.join("")}</div></div>
+    <div class="legend">${PHASES.filter(p=>used.includes(p.id)).map(p=>`<span><i style="background:var(${p.c})"></i>${p.name}</span>`).join("")}</div>
+  </section>`;
+}
+function lastVal(k){const e=S.entries.find(e=>num(e[k])!=null);return e?{v:+e[k],e}:null}
+function nowHTML(g,phase){
+  const t=lastVal("temp"),rh=lastVal("rh"),h=lastVal("height"),lx=lastVal("lux"),ph=lastVal("ph"),ec=lastVal("ec");
+  const base=S.entries.find(e=>num(e.temp)!=null&&num(e.rh)!=null);
+  const v=base?vpd(+base.temp,+base.rh):null; const vs=vpdState(v,base?.phase||phase);
+  const ppfd=lx?lx.v/LUX_PER_PPFD:null; const dli=ppfd!=null&&g.lightHours?ppfd*g.lightHours*0.0036:null;
+  const ago=e=>{const n=Math.round((d0(isoToday())-d0(e.date))/DAY);return n<=0?"heute":n===1?"gestern":"vor "+n+" Tagen"};
+  const water=S.entries.find(e=>(e.tasks||[]).includes("Gegossen")||num(e.water)!=null);
+  return `<section class="now" aria-label="Letzte Werte">
+    <div><span class="label">Höhe</span><span class="v">${h?fmt(h.v,0):"–"}<em>cm</em></span><span class="s">${h?ago(h.e):"noch nicht gemessen"}</span></div>
+    <div><span class="label">Klima</span><span class="v">${t?fmt(t.v,1):"–"}<em>°C</em> ${rh?fmt(rh.v,0):"–"}<em>%</em></span><span class="s">${t?ago(t.e):"noch keine Werte"}</span></div>
+    <div><span class="label">VPD</span><span class="v">${fmt(v,2)}<em>kPa</em></span><span class="s ${vs?vs[0]:""}">${vs?`${vs[0]==="st-good"?"●":"▲"} ${vs[1]} (${fmt(vs[2][0],1)}–${fmt(vs[2][1],1)})`:"Temp. + rH eintragen"}</span></div>
+    <div><span class="label">Licht</span><span class="v">${ppfd!=null?fmt(ppfd,0):"–"}<em>µmol/m²/s</em></span><span class="s">${lx?`${fmt(lx.v,0)} lx${dli!=null?" · DLI ≈ "+fmt(dli,0)+" mol":""}`:"Lux-Messung eintragen"}</span></div>
+    <div><span class="label">Wurzelzone</span><span class="v">${ph?fmt(ph.v,1):"–"}<em>pH</em> ${ec?fmt(ec.v,1):"–"}<em>EC</em></span><span class="s">${water?"zuletzt gegossen "+ago(water):"noch nicht gegossen"}</span></div>
+  </section>`;
+}
+
+/* ---------- Diagramme ---------- */
+const CHARTS=[{k:"height",t:"Höhe",u:"cm",d:0},{k:"temp",t:"Temperatur",u:"°C",d:1},{k:"rh",t:"Luftfeuchte",u:"% rH",d:0},{k:"vpd",t:"VPD",u:"kPa",d:2}];
+function series(k){
+  const g=cur();
+  return [...S.entries].sort((a,b)=>a.date.localeCompare(b.date)).map(e=>({x:dayOf(g,e.date),date:e.date,y:k==="vpd"?vpd(num(e.temp),num(e.rh)):num(e[k]),phase:e.phase})).filter(p=>p.y!=null);
+}
+function nice(lo,hi){if(lo===hi){lo-=1;hi+=1}const span=hi-lo,step=Math.pow(10,Math.floor(Math.log10(span/3)));const st=[1,2,2.5,5,10].map(m=>m*step).find(s=>span/s<=4)||step*10;return{lo:Math.floor(lo/st)*st,hi:Math.ceil(hi/st)*st,st}}
+function chartsHTML(){
+  return `<section style="display:flex;flex-direction:column;gap:8px"><span class="label">Verlauf nach Grow-Tag</span><div class="charts">${CHARTS.map(c=>{
+    const s=series(c.k); const last=s[s.length-1];
+    return `<div class="chart" data-k="${c.k}"><header><h3>${c.t}</h3><span class="last">${last?fmt(last.y,c.d)+" "+c.u:""}</span></header>${s.length<2?`<div class="empty">${s.length?"Ab zwei Messungen erscheint hier die Kurve.":"Noch keine Messwerte."}</div>`:svgChart(c,s)}</div>`}).join("")}</div>
+    <span class="charts-note">VPD aus Temperatur und Luftfeuchte, Blatttemperatur 2 °C unter Luft angenommen. Schattierung = Zielbereich der Phase.</span></section>`;
+}
+function svgChart(c,s){
+  const W=300,H=130,L=34,R=8,T=10,B=22;
+  let lo=Math.min(...s.map(p=>p.y)),hi=Math.max(...s.map(p=>p.y));
+  if(c.k==="vpd"){lo=Math.min(lo,0.4);hi=Math.max(hi,1.6)}
+  const n=nice(lo,hi); const x0=s[0].x,x1=s[s.length-1].x===x0?x0+1:s[s.length-1].x;
+  const X=x=>L+(x-x0)/(x1-x0)*(W-L-R), Y=y=>T+(1-(y-n.lo)/(n.hi-n.lo))*(H-T-B);
+  let grid="";for(let v=n.lo;v<=n.hi+1e-9;v+=n.st){grid+=`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" stroke-width="1"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end" font-size="10" fill="var(--ink-2)" font-family="IBM Plex Mono,monospace">${fmt(v,n.st<1?(n.st<0.1?2:1):0)}</text>`}
+  let band="";
+  if(c.k==="vpd"){ // Zielband je Phasenabschnitt
+    for(let i=0;i<s.length;i++){const r=VPD_T[s[i].phase];if(!r)continue;const xa=X(i?(s[i-1].x+s[i].x)/2:s[i].x),xb=X(i<s.length-1?(s[i].x+s[i+1].x)/2:s[i].x);
+      const ya=Y(Math.min(r[1],n.hi)),yb=Y(Math.max(r[0],n.lo));band+=`<rect x="${xa}" y="${ya}" width="${Math.max(1,xb-xa)}" height="${yb-ya}" fill="var(--ph-wachs)" opacity=".14"/>`}
+  }
+  const pts=s.map(p=>`${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join(" ");
+  const area=`M${X(s[0].x)},${Y(n.lo)} L${pts.split(" ").join(" L")} L${X(s[s.length-1].x)},${Y(n.lo)} Z`;
+  const lp=s[s.length-1];
+  const xt=[x0,Math.round((x0+x1)/2),x1].filter((v,i,a)=>a.indexOf(v)===i).map(v=>`<text x="${X(v)}" y="${H-6}" text-anchor="middle" font-size="10" fill="var(--ink-2)" font-family="IBM Plex Mono,monospace">T${v}</text>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${c.t} von Tag ${x0} bis ${x1}" data-pts='${esc(JSON.stringify(s.map(p=>[X(p.x),Y(p.y),p.x,p.y,p.date])))}' data-u="${esc(c.u)}" data-d="${c.d}">
+    ${band}${grid}<path d="${area}" fill="var(--accent)" opacity=".08"/>
+    <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${X(lp.x)}" cy="${Y(lp.y)}" r="4" fill="var(--accent)" stroke="var(--sheet)" stroke-width="2"/>
+    ${xt}
+    <line class="xh" x1="0" x2="0" y1="${T}" y2="${H-B}" stroke="var(--ink-2)" stroke-width="1" stroke-dasharray="3 3" visibility="hidden"/>
+    <circle class="hp" r="4" fill="var(--sheet)" stroke="var(--accent)" stroke-width="2" visibility="hidden"/>
+    <rect x="${L}" y="0" width="${W-L-R}" height="${H}" fill="transparent" class="hit"/>
+  </svg>`;
+}
+function wireCharts(){
+  document.querySelectorAll(".chart svg").forEach(svg=>{
+    const pts=JSON.parse(svg.dataset.pts),u=svg.dataset.u,d=+svg.dataset.d,box=svg.closest(".chart");
+    let tip=null; const xh=svg.querySelector(".xh"),hp=svg.querySelector(".hp");
+    const move=ev=>{const r=svg.getBoundingClientRect(),vx=(ev.clientX-r.left)/r.width*300;
+      let best=pts[0];for(const p of pts)if(Math.abs(p[0]-vx)<Math.abs(best[0]-vx))best=p;
+      xh.setAttribute("x1",best[0]);xh.setAttribute("x2",best[0]);xh.setAttribute("visibility","visible");
+      hp.setAttribute("cx",best[0]);hp.setAttribute("cy",best[1]);hp.setAttribute("visibility","visible");
+      if(!tip){tip=document.createElement("div");tip.className="tip";box.appendChild(tip)}
+      tip.textContent=`Tag ${best[2]} · ${fmt(best[3],d)} ${u}`;
+      const br=box.getBoundingClientRect();tip.style.left=(r.left-br.left+best[0]/300*r.width)+"px";tip.style.top=(r.top-br.top+best[1]/130*r.height-6)+"px"};
+    const leave=()=>{xh.setAttribute("visibility","hidden");hp.setAttribute("visibility","hidden");tip?.remove();tip=null};
+    svg.addEventListener("pointermove",move);svg.addEventListener("pointerleave",leave);
+  });
+}
+
+/* ---------- Zeitstrahl ---------- */
+function timelineHTML(g){
+  if(!S.entriesLoaded)return `<span class="status">Einträge werden geladen …</span>`;
+  if(!S.entries.length)return `<div class="blank"><h2>Tag 1 wartet</h2><p>Trag ein, was heute passiert ist: Höhe, Temperatur, Luftfeuchte, gegossene Menge, pH und EC, Maßnahmen wie LST oder Topping – und ein Foto. Jeder Eintrag erscheint hier im Zeitstrahl und in den Kurven.</p><button class="btn primary" type="button" onclick="openEntry()">Ersten Eintrag schreiben</button></div>`;
+  return `<div class="timeline">${S.entries.map(e=>{
+    const p=PH[e.phase]||PHASES[2]; const day=dayOf(g,e.date); const bw=bloomWeek(g,e.date);
+    const v=vpd(num(e.temp),num(e.rh)); const vs=vpdState(v,e.phase);
+    const vals=[["Höhe",e.height,0,"cm"],["Temp",e.temp,1,"°C"],["rH",e.rh,0,"%"],["Licht",e.lux,0,"lx"],["Wasser",e.water,0,"ml"],["pH",e.ph,1,""],["EC",e.ec,1,""]].filter(x=>num(x[1])!=null)
+      .map(x=>`<span><b>${x[0]}</b>${fmt(+x[1],x[2])}${x[3]?" "+x[3]:""}</span>`);
+    if(v!=null)vals.push(`<span><b>VPD</b><span class="${vs?vs[0]:""}">${fmt(v,2)} kPa</span></span>`);
+    const tasks=[...(e.tasks||[]),...(e.nutrients?["Dünger: "+e.nutrients]:[])];
+    return `<article class="entry">
+      <div class="tag"><small>Tag</small>${day}</div><span class="pin" style="background:var(${p.c})"></span>
+      <div class="ehead"><span class="date">${deDate(e.date)}</span><span class="phase">${p.name}${bw?" · Blütewoche "+bw:""}</span>
+        <span class="actions"><button class="btn ghost" type="button" onclick="openEntry('${esc(e.id)}')">Bearbeiten</button><button class="btn ghost danger" type="button" onclick="askDel('${esc(e.id)}')">Löschen</button></span></div>
+      ${S.confirmDel===e.id?`<div class="confirm">Eintrag von Tag ${day} endgültig löschen${(e.photos||[]).length?" (inkl. "+e.photos.length+" Foto"+(e.photos.length>1?"s":"")+")":""}?<button class="btn danger" type="button" onclick="delEntry('${esc(e.id)}')">Ja, löschen</button><button class="btn ghost" type="button" onclick="askDel(null)">Behalten</button></div>`:""}
+      ${vals.length?`<div class="vals">${vals.join("")}</div>`:""}
+      ${tasks.length?`<div class="tasks">${tasks.map(t=>`<span class="task">${esc(t)}</span>`).join("")}</div>`:""}
+      ${e.notes?`<p class="note">${esc(e.notes)}</p>`:""}
+      ${(e.photos||[]).length?`<div class="photos">${e.photos.map(id=>`<img src="${blob(esc(id))}" alt="Foto von Tag ${day}" loading="lazy" onclick="showPhoto(this.src)">`).join("")}</div>`:""}
+    </article>`}).join("")}</div>`;
+}
+function askDel(id){S.confirmDel=id;render()}
+async function delEntry(id){
+  const e=S.entries.find(x=>x.id===id);if(!e)return;
+  try{await api("DELETE","api/grows/"+encodeURIComponent(S.growId)+"/entries/"+encodeURIComponent(id))}
+  catch(err){alertStatus("Löschen fehlgeschlagen: "+errMsg(err))}
+  S.confirmDel=null;loadEntries();
+}
+function alertStatus(msg){const m=$("main");const d=document.createElement("p");d.className="status err";d.textContent=msg;m.prepend(d);setTimeout(()=>d.remove(),6000)}
+function showPhoto(src){$("lbImg").src=src;$("dlgPhoto").showModal()}
+
+/* ---------- Grow-Dialog ---------- */
+function openGrow(edit){
+  const g=edit?cur():null; S.editGrow=g?g.id:null;
+  $("growDlgTitle").textContent=g?"Grow bearbeiten":"Neuer Grow";
+  $("g_name").value=g?.name||"";$("g_strain").value=g?.strain||"";$("g_type").value=g?.type||"photo";$("g_medium").value=g?.medium||"Erde";
+  $("g_start").value=g?.startDate||isoToday();$("g_flip").value=g?.flipDate||"";$("g_harvest").value=g?.harvestDate||"";
+  $("g_light").value=g?.lightHours??18;$("g_tent").value=g?.tent||"";$("g_lamp").value=g?.lamp||"";$("g_pot").value=g?.pot||"";$("g_notes").value=g?.notes||"";
+  $("btnDelGrow").hidden=!g;$("growDelBox").innerHTML="";$("growStatus").textContent="";
+  $("dlgGrow").showModal();
+}
+$("formGrow").addEventListener("submit",async ev=>{
+  ev.preventDefault();
+  const data={kind:"grow",name:$("g_name").value.trim(),strain:$("g_strain").value.trim(),type:$("g_type").value,medium:$("g_medium").value,
+    startDate:$("g_start").value,flipDate:$("g_flip").value||null,harvestDate:$("g_harvest").value||null,lightHours:num($("g_light").value),
+    tent:$("g_tent").value.trim(),lamp:$("g_lamp").value.trim(),pot:$("g_pot").value.trim(),notes:$("g_notes").value.trim()};
+  if(!data.name||!data.startDate){$("growStatus").textContent="Name und Startdatum fehlen.";return}
+  $("btnSaveGrow").disabled=true;$("growStatus").textContent="Speichere …";
+  try{
+    if(S.editGrow){const old=cur();const {id:_,...rest}=old||{};await api("PUT","api/grows/"+encodeURIComponent(S.editGrow),{...rest,...data});await loadGrows(S.editGrow)}
+    else{const r=await api("POST","api/grows",data);await loadGrows(r.id)}
+    $("dlgGrow").close();
+  }catch(err){$("growStatus").textContent="Speichern fehlgeschlagen: "+errMsg(err)}
+  $("btnSaveGrow").disabled=false;
+});
+$("btnDelGrow").addEventListener("click",()=>{
+  const g=cur();
+  $("growDelBox").innerHTML=`<div class="confirm">„${esc(g.name)}“ mit allen ${S.entries.length} Einträgen und Fotos endgültig löschen?<button class="btn danger" type="button" id="btnDelGrowYes">Ja, alles löschen</button><button class="btn ghost" type="button" id="btnDelGrowNo">Behalten</button></div>`;
+  $("btnDelGrowNo").onclick=()=>{$("growDelBox").innerHTML=""};
+  $("btnDelGrowYes").onclick=async()=>{
+    $("growStatus").textContent="Lösche …";
+    try{await api("DELETE","api/grows/"+encodeURIComponent(g.id));S.growId=null;$("dlgGrow").close();loadGrows()}
+    catch(err){$("growStatus").textContent="Löschen fehlgeschlagen: "+errMsg(err)}
+  };
+});
+
+/* ---------- Eintrags-Dialog ---------- */
+$("e_phase").innerHTML=PHASES.map(p=>`<option value="${p.id}">${p.name}</option>`).join("");
+$("e_tasks").insertAdjacentHTML("beforeend",TASKS.map((t,i)=>`<label><input type="checkbox" id="t_${i}" value="${t}"> ${t}</label>`).join(""));
+function updateCalc(){
+  const v=vpd(num($("e_temp").value),num($("e_rh").value)),vs=vpdState(v,$("e_phase").value);
+  $("e_vpd").innerHTML=v==null?"Temp. + rH eintragen":`${fmt(v,2)} kPa${vs?` · <span class="${vs[0]}">${vs[1]}</span>`:""}`;
+  const lx=num($("e_lux").value);const g=cur();
+  $("e_ppfd").textContent=lx==null?"≈ PPFD aus Lux":`≈ ${fmt(lx/LUX_PER_PPFD,0)} µmol/m²/s${g?.lightHours?" · DLI "+fmt(lx/LUX_PER_PPFD*g.lightHours*0.0036,0):""}`;
+  const d=$("e_date").value;$("e_dayhint").textContent=d&&g?`Tag ${dayOf(g,d)}${bloomWeek(g,d)?" · Blütewoche "+bloomWeek(g,d):""}`:"";
+}
+["e_temp","e_rh","e_lux","e_phase","e_date"].forEach(id=>$(id).addEventListener("input",updateCalc));
+function openEntry(id){
+  const g=cur(); if(!g)return; const e=id?S.entries.find(x=>x.id===id):null; S.editEntry=e?e.id:null;
+  const prev=S.entries[0];
+  $("entryDlgTitle").textContent=e?"Eintrag bearbeiten":"Neuer Eintrag";
+  $("e_date").value=e?.date||isoToday();
+  $("e_phase").value=e?.phase||prev?.phase||(g.flipDate&&isoToday()>=g.flipDate?"bluete":"keimung");
+  for(const k of ["height","temp","rh","lux","water","ph","ec"])$("e_"+k).value=e?.[k]??"";
+  $("e_nutr").value=e?.nutrients||"";$("e_notes").value=e?.notes||"";
+  TASKS.forEach((t,i)=>{$("t_"+i).checked=!!e?.tasks?.includes(t)});
+  S.pending=[...(e?.photos||[])];$("e_photos").value="";drawThumbs();
+  $("entryStatus").textContent="";updateCalc();$("dlgEntry").showModal();
+}
+function drawThumbs(){$("e_thumbs").innerHTML=S.pending.map((id,i)=>`<div><img src="${blob(esc(id))}" alt="Foto ${i+1}"><button type="button" aria-label="Foto entfernen" onclick="S.pending.splice(${i},1);drawThumbs()">×</button></div>`).join("")}
+$("e_photos").addEventListener("change",async ev=>{
+  const files=[...ev.target.files]; $("btnSaveEntry").disabled=true;
+  for(const [i,f] of files.entries()){
+    $("entryStatus").textContent=`Lade Foto ${i+1} von ${files.length} hoch …`;
+    try{const small=await shrink(f);const r=await api("POST","api/photos",small,small.type||"image/jpeg");S.pending.push(r.id);drawThumbs()}
+    catch(err){$("entryStatus").textContent="Foto-Upload fehlgeschlagen: "+errMsg(err);$("btnSaveEntry").disabled=false;return}
+  }
+  $("entryStatus").textContent="";$("btnSaveEntry").disabled=false;ev.target.value="";
+});
+async function shrink(f){ // Fotos auf max. 1600 px verkleinern, spart Speicher
+  try{const bmp=await createImageBitmap(f);const k=Math.min(1,1600/Math.max(bmp.width,bmp.height));if(k===1&&f.size<1.5e6)return f;
+    const c=document.createElement("canvas");c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);
+    return await new Promise(r=>c.toBlob(b=>r(b||f),"image/jpeg",0.85));}catch(e){return f}
+}
+$("formEntry").addEventListener("submit",async ev=>{
+  ev.preventDefault(); const g=cur(); if(!g)return;
+  const data={date:$("e_date").value,phase:$("e_phase").value,nutrients:$("e_nutr").value.trim(),notes:$("e_notes").value.trim(),
+    tasks:TASKS.filter((t,i)=>$("t_"+i).checked),photos:[...S.pending]};
+  for(const k of ["height","temp","rh","lux","water","ph","ec"])data[k]=num($("e_"+k).value);
+  if(num(data.water)!=null&&!data.tasks.includes("Gegossen"))data.tasks.unshift("Gegossen");
+  $("btnSaveEntry").disabled=true;$("entryStatus").textContent="Speichere …";
+  try{
+    const base="api/grows/"+encodeURIComponent(g.id)+"/entries";
+    if(S.editEntry)await api("PUT",base+"/"+encodeURIComponent(S.editEntry),data);
+    else await api("POST",base,data);
+    $("dlgEntry").close();loadEntries();
+  }catch(err){$("entryStatus").textContent="Speichern fehlgeschlagen: "+errMsg(err)}
+  $("btnSaveEntry").disabled=false;
+});
+
+/* ---------- Sonstiges ---------- */
+document.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",()=>b.closest("dialog").close()));
+$("btnNewGrow").addEventListener("click",()=>openGrow(false));
+$("btnEditGrow").addEventListener("click",()=>openGrow(true));
+$("growSel").addEventListener("change",ev=>selectGrow(ev.target.value));
+$("btnExport").addEventListener("click",()=>{const g=cur();if(g)location.href="api.php?r=grows/"+encodeURIComponent(g.id)+"/export"});
+$("btnLogout").addEventListener("click",async()=>{try{await api("POST","api/logout",{})}catch(e){}boot()});
+$("btnPw").addEventListener("click",()=>{$("pw_old").value="";$("pw_new").value="";$("pwStatus").textContent="";$("formUser").hidden=!S.isAdmin;$("nuStatus").textContent="";$("dlgPw").showModal()});
+$("formUser").addEventListener("submit",async ev=>{
+  ev.preventDefault();const n=$("nu_name").value.trim();
+  try{await api("POST","api/users",{username:n,password:$("nu_pw").value});$("nuStatus").textContent="„"+n+"“ angelegt.";$("nu_name").value="";$("nu_pw").value=""}
+  catch(e){$("nuStatus").textContent=errMsg(e)}
+});
+$("formPw").addEventListener("submit",async ev=>{
+  ev.preventDefault();
+  try{await api("POST","api/password",{old:$("pw_old").value,new:$("pw_new").value});$("pwStatus").textContent="Passwort geändert.";setTimeout(()=>$("dlgPw").close(),900)}
+  catch(e){$("pwStatus").textContent=errMsg(e)}
+});
+boot();
+</script>
+</body>
+</html>
